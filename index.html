@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23132d4d'/%3E%3Crect x='13' y='14' width='38' height='36' rx='4' fill='%23142c49' stroke='%2358a6ff' stroke-width='3'/%3E%3Cpath d='M13 26h38M13 38h38M27 14v36M39 14v36' stroke='%2358a6ff' stroke-width='2'/%3E%3Crect x='28' y='27' width='10' height='10' fill='%233fb950'/%3E%3C/svg%3E">
+    <title>MyData</title>
+    <script>
+      (() => {
+        const theme =
+          window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
