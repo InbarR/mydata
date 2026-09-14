@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 import {
   ArrowDown, ArrowUp, BarChart3, Check, ChevronDown, ChevronLeft, ChevronRight,
   Columns3, Copy, Download, ExternalLink, EyeOff, FileCode2, FileSpreadsheet, Filter, FilterX, FolderOpen,
-  GripVertical, Group, Layers3, ListFilter, PaintBucket, Palette, Pencil, Plus, RotateCcw, Search, Sheet, SlidersHorizontal, Trash2,
+  GripVertical, Group, Highlighter, Layers3, ListFilter, PaintBucket, Palette, Pencil, Plus, RotateCcw, Search, Sheet, SlidersHorizontal, Trash2,
   Upload, X
 } from "lucide-react";
 import "./styles.css";
@@ -101,7 +101,7 @@ function matches(value, operator, expected) {
 
 function compileSmartQuery(source) {
   const queryText = text(source).trim();
-  if (!queryText) return { test: () => true, error: "" };
+  if (!queryText) return { test: () => true, error: "", highlightTerms: [] };
   const tokens = [];
   const regexToken = (pattern, flags = "i") => {
     try {
@@ -194,8 +194,14 @@ function compileSmartQuery(source) {
     }
   }
   if (negateNext || !groups.at(-1).length) return { test: () => false, error: "Query cannot end with an operator" };
+  const highlightTerms = [...new Set(
+    groups.flat()
+      .filter(token => token.kind === "term" && !token.negated && token.value)
+      .map(token => token.value.toLocaleLowerCase())
+  )].sort((left, right) => right.length - left.length);
   return {
     error: "",
+    highlightTerms,
     test(value, fields = []) {
       const raw = text(value);
       const lower = raw.toLocaleLowerCase();
@@ -208,6 +214,18 @@ function compileSmartQuery(source) {
       }));
     }
   };
+}
+
+function highlightedValue(value, terms) {
+  const source = text(value);
+  if (!source || !terms.length) return source;
+  const escaped = terms.map(term => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(`(${escaped.join("|")})`, "gi");
+  return source.split(pattern).map((part, index) =>
+    terms.some(term => part.toLocaleLowerCase() === term)
+      ? <mark className="search-match" key={`${index}-${part}`}>{part}</mark>
+      : <React.Fragment key={`${index}-${part}`}>{part}</React.Fragment>
+  );
 }
 
 function dedupeHeaders(headers) {
@@ -279,6 +297,7 @@ function App() {
   const [datasets, setDatasets] = useState([]);
   const [activeId, setActiveId] = useState("all");
   const [query, setQuery] = useState("");
+  const [highlightMatches, setHighlightMatches] = useState(false);
   const [quickFilters, setQuickFilters] = useState({});
   const [filters, setFilters] = useState([]);
   const [sort, setSort] = useState({ column: "", direction: "asc" });
@@ -744,7 +763,7 @@ function App() {
     });
   }
 
-  function showContextMenu(event, type, column, value = "") {
+  function showContextMenu(event, type, column, value = "", row = null) {
     event.preventDefault();
     const width = 250;
     const height = type === "cell" ? 310 : 250;
@@ -752,9 +771,24 @@ function App() {
       type,
       column,
       value,
+      row,
       x: Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8)),
       y: Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8))
     });
+  }
+
+  async function writeClipboard(value) {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = value;
+      textarea.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
   }
 
   function addContextFilter(operator) {
@@ -790,19 +824,16 @@ function App() {
   }
 
   async function copyContextValue() {
-    const value = text(contextMenu.value);
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = value;
-      textarea.style.cssText = "position:fixed;opacity:0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      textarea.remove();
-    }
+    await writeClipboard(text(contextMenu.value));
     setNotice({ type: "success", text: "Cell value copied." });
+    setContextMenu(null);
+  }
+
+  async function copyContextRow() {
+    const row = contextMenu.row;
+    if (!row) return;
+    await writeClipboard(visibleColumns.map(column => text(row[column])).join("\t"));
+    setNotice({ type: "success", text: "Visible row copied for spreadsheet paste." });
     setContextMenu(null);
   }
 
@@ -1151,9 +1182,13 @@ tbody tr:hover td{background:color-mix(in srgb,var(--cp-accent) 10%,var(--cp-sur
               className={format.className}
               style={format.style}
               title={text(row[column])}
-              onContextMenu={event => showContextMenu(event, "cell", column, row[column])}
+              onContextMenu={event => showContextMenu(event, "cell", column, row[column], row)}
             >
-              {text(row[column]) || <span className="blank">—</span>}
+              {text(row[column])
+                ? (highlightMatches
+                    ? highlightedValue(row[column], smartQuery.highlightTerms || [])
+                    : text(row[column]))
+                : <span className="blank">—</span>}
             </td>
           );
         })}
@@ -1325,6 +1360,16 @@ tbody tr:hover td{background:color-mix(in srgb,var(--cp-accent) 10%,var(--cp-sur
                 {!query && <kbd title="Press / or Ctrl+Shift+F to focus">/</kbd>}
                 {query && <IconButton label="Clear search" onClick={() => setQuery("")}><X size={14} /></IconButton>}
               </div>
+              <button
+                className={`button highlight-toggle ${highlightMatches && query ? "active" : ""}`}
+                disabled={!query || Boolean(smartQuery.error) || !(smartQuery.highlightTerms || []).length}
+                onClick={() => setHighlightMatches(value => !value)}
+                title={(smartQuery.highlightTerms || []).length
+                  ? "Highlight positive literal and quoted search terms in visible cells"
+                  : "Regex and negated terms filter rows but are not highlighted"}
+              >
+                <Highlighter size={15} /> Highlight matches
+              </button>
               <button className={`button ${filterPanelOpen ? "active" : ""}`} onClick={() => setFilterPanelOpen(value => !value)}><Filter size={15} /> Filters {filterCount > 0 && <span className="count">{filterCount}</span>}</button>
               <button
                 className={`button ${quickFiltersVisible ? "active" : ""}`}
@@ -1559,6 +1604,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--cp-accent) 10%,var(--cp-sur
         </div>
         {contextMenu.type === "cell" ? <>
           <button role="menuitem" onClick={copyContextValue}><Copy size={15} /><span>Copy cell value</span></button>
+          <button role="menuitem" onClick={copyContextRow}><Copy size={15} /><span>Copy row</span></button>
           <div className="context-divider" />
           <button role="menuitem" onClick={() => addContextFilter(isBlank(contextMenu.value) ? "blank" : "equals")}><Filter size={15} /><span>Filter to this value</span></button>
           {!isBlank(contextMenu.value) && <button role="menuitem" onClick={() => addContextFilter("notEquals")}><FilterX size={15} /><span>Exclude this value</span></button>}

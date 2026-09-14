@@ -21,10 +21,11 @@ according to the sensitivity of their source data.
 
 - Multiple workbooks and worksheets
 - Combined workbook and all-source views
-- Smart search, including AND, OR, NOT, `!`, quoted phrases, and regex
+- Smart search, including AND, OR, NOT, `!`, quoted phrases, regex, and optional match highlighting
 - Advanced filters, grouping, sorting, and pagination
 - Column visibility, renaming, resizing, and fit-to-content
 - Manual row ordering
+- Cell and row clipboard actions from the right-click menu
 - Value colors, per-value palettes, and conditional formatting
 - Excel, CSV, and standalone HTML exports
 - Self-contained offline HTML artifact
