@@ -560,7 +560,7 @@ function App() {
   const filterCount = filters.length + Object.values(quickFilters).filter(Boolean).length + (query ? 1 : 0);
 
   async function importFiles(fileList) {
-    const files = [...fileList].filter(file => /\.(xlsx|xlsm|xls|csv)$/i.test(file.name));
+    const files = [...fileList];
     if (!files.length) {
       setNotice({ type: "error", text: "Choose one or more Excel or CSV files." });
       return;
