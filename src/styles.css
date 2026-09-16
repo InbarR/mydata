@@ -313,6 +313,8 @@ tbody tr:hover td.value-color-4 { background: var(--cp-value-4); }
 tbody tr:hover td.value-color-5 { background: var(--cp-value-5); }
 tbody tr:hover td.value-color-6 { background: var(--cp-value-6); }
 tbody tr:hover td.value-color-7 { background: var(--cp-value-7); }
+tbody tr.selected-row td { background: color-mix(in srgb, var(--cp-accent) 22%, var(--cp-surface)); }
+tbody tr.selected-row td.row-number { background: color-mix(in srgb, var(--cp-accent) 22%, var(--cp-table-head)); }
 td.selected-cell { position: relative; outline: 2px solid var(--cp-accent); outline-offset: -2px; z-index: 1; }
 td.selected-cell:focus { outline: 2px solid var(--cp-accent); outline-offset: -2px; }
 td.editing-cell { padding: 0; overflow: visible; }

@@ -1227,7 +1227,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--cp-accent) 10%,var(--cp-sur
       return (
       <tr
         key={row.__rowId}
-        className={`${draggedRowId === row.__rowId ? "dragging-row" : ""} ${dragOverRowId === row.__rowId ? "drag-over-row" : ""}`}
+        className={`${draggedRowId === row.__rowId ? "dragging-row" : ""} ${dragOverRowId === row.__rowId ? "drag-over-row" : ""} ${selectedCell?.rowId === row.__rowId ? "selected-row" : ""}`}
         onDragOver={event => {
           if (!draggedRowId || draggedRowId === row.__rowId || groupBy) return;
           event.preventDefault();
