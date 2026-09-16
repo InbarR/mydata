@@ -261,9 +261,14 @@ function parseSheet(workbook, sheetName, workbookName) {
 
 async function parseFile(file) {
   const data = await file.arrayBuffer();
-  const prefix = new TextDecoder().decode(data.slice(0, 128)).trimStart().toLowerCase();
-  if (prefix.startsWith("<!doctype html") || prefix.startsWith("<html")) {
-    throw new Error(`${file.name} is an HTML page, not an Excel workbook.`);
+  const prefix = new TextDecoder().decode(data.slice(0, 512)).trimStart().toLowerCase();
+  const isWebPage =
+    file.type.toLowerCase().includes("text/html") ||
+    /^<(?:!doctype\s+html|html|head|body|meta|script)\b/.test(prefix) ||
+    prefix.includes("sharepoint.com") ||
+    prefix.includes("microsoftonline.com");
+  if (isWebPage) {
+    throw new Error(`${file.name} is a SharePoint page, not the workbook. In SharePoint, use Download > Download a copy, then choose the downloaded .xlsx file.`);
   }
   let workbook;
   try {
@@ -1335,7 +1340,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--cp-accent) 10%,var(--cp-sur
             <h2>Drop Excel files here</h2>
             <p>Open multiple workbooks, switch between sheets, or combine everything in one table.</p>
             <div><button className="primary" onClick={() => inputRef.current?.click()}><Upload size={16} /> Choose files</button><button className="button" onClick={loadSample}>Try sample data</button></div>
-            <small>Supports .xlsx, .xlsm, .xls, and .csv</small>
+            <small>Supports .xlsx, .xlsm, .xls, and .csv · For SharePoint, download a copy first</small>
           </section>
         ) : (
           <>
