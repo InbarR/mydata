@@ -334,6 +334,9 @@ function App() {
   const [columnAliases, setColumnAliases] = useState({});
   const [editingColumn, setEditingColumn] = useState("");
   const [renameDraft, setRenameDraft] = useState("");
+  const [selectedCell, setSelectedCell] = useState(null);
+  const [editingCell, setEditingCell] = useState(null);
+  const [cellDraft, setCellDraft] = useState("");
   const [contextMenu, setContextMenu] = useState(null);
   const [notice, setNotice] = useState(null);
   const inputRef = useRef(null);
@@ -341,6 +344,7 @@ function App() {
   const exportMenuRef = useRef(null);
   const colorMenuRef = useRef(null);
   const columnsMenuRef = useRef(null);
+  const cancelCellEditRef = useRef(false);
 
   const selected = useMemo(() => {
     let result;
@@ -443,8 +447,16 @@ function App() {
     setHiddenColumns(defaultHiddenColumns());
     setGroupBy("");
     setEditingColumn("");
+    setSelectedCell(null);
+    setEditingCell(null);
     setPage(1);
   }, [activeId]);
+
+  useEffect(() => {
+    if (!selectedCell || editingCell) return;
+    const columnIndex = visibleColumns.indexOf(selectedCell.column);
+    document.querySelector(`[data-cell="${selectedCell.rowId}:${columnIndex}"]`)?.focus();
+  }, [selectedCell, editingCell]);
 
   useEffect(() => {
     const focusSearch = event => {
@@ -562,6 +574,9 @@ function App() {
   useEffect(() => setPage(current => Math.min(current, totalPages)), [totalPages]);
   const start = pageSize === 0 ? 0 : (page - 1) * pageSize;
   const pageRows = pageSize === 0 ? filteredRows : filteredRows.slice(start, start + pageSize);
+  const navigableRows = groupBy && groups
+    ? groups.flatMap(([groupName, rows]) => collapsedGroups.has(groupName) ? [] : rows)
+    : pageRows;
   const filterCount = filters.length + Object.values(quickFilters).filter(Boolean).length + (query ? 1 : 0);
 
   async function importFiles(fileList) {
@@ -840,6 +855,72 @@ function App() {
     await writeClipboard(visibleColumns.map(column => text(row[column])).join("\t"));
     setNotice({ type: "success", text: "Visible row copied for spreadsheet paste." });
     setContextMenu(null);
+  }
+
+  function canEditCell(rowId, column) {
+    return datasets.some(dataset =>
+      dataset.columns.includes(column) && dataset.rows.some(row => row.__rowId === rowId)
+    );
+  }
+
+  function focusCell(rowId, column) {
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-cell="${rowId}:${visibleColumns.indexOf(column)}"]`)?.focus();
+    });
+  }
+
+  function beginCellEdit(row, column) {
+    if (!canEditCell(row.__rowId, column)) {
+      setNotice({ type: "error", text: "Source columns in combined views cannot be edited." });
+      return;
+    }
+    cancelCellEditRef.current = false;
+    setSelectedCell({ rowId: row.__rowId, column });
+    setEditingCell({ rowId: row.__rowId, column });
+    setCellDraft(text(row[column]));
+    setContextMenu(null);
+  }
+
+  function commitCellEdit() {
+    if (!editingCell) return;
+    const { rowId, column } = editingCell;
+    setDatasets(current => current.map(dataset => ({
+      ...dataset,
+      rows: dataset.rows.map(row =>
+        row.__rowId === rowId && dataset.columns.includes(column)
+          ? { ...row, [column]: cellDraft }
+          : row
+      )
+    })));
+    setEditingCell(null);
+    focusCell(rowId, column);
+  }
+
+  function moveSelectedCell(rowId, column, rowOffset, columnOffset) {
+    const rowIndex = navigableRows.findIndex(row => row.__rowId === rowId);
+    const columnIndex = visibleColumns.indexOf(column);
+    if (rowIndex < 0 || columnIndex < 0) return;
+    const nextRow = navigableRows[Math.max(0, Math.min(navigableRows.length - 1, rowIndex + rowOffset))];
+    const nextColumn = visibleColumns[Math.max(0, Math.min(visibleColumns.length - 1, columnIndex + columnOffset))];
+    if (!nextRow || !nextColumn) return;
+    setSelectedCell({ rowId: nextRow.__rowId, column: nextColumn });
+    focusCell(nextRow.__rowId, nextColumn);
+  }
+
+  function handleCellKeyDown(event, row, column) {
+    const directions = {
+      ArrowUp: [-1, 0],
+      ArrowDown: [1, 0],
+      ArrowLeft: [0, -1],
+      ArrowRight: [0, 1]
+    };
+    if (directions[event.key]) {
+      event.preventDefault();
+      moveSelectedCell(row.__rowId, column, ...directions[event.key]);
+    } else if (event.key === "Enter" || event.key === "F2") {
+      event.preventDefault();
+      beginCellEdit(row, column);
+    }
   }
 
   function updateConditionalRule(id, patch) {
@@ -1181,19 +1262,56 @@ tbody tr:hover td{background:color-mix(in srgb,var(--cp-accent) 10%,var(--cp-sur
         {visibleColumns.map(column => {
           const cellStyle = cellFormat(column, row[column]);
           const format = cellStyle.priority === 2 ? cellStyle : rowStyle.className ? rowStyle : cellStyle;
+          const isSelected = selectedCell?.rowId === row.__rowId && selectedCell.column === column;
+          const isEditing = editingCell?.rowId === row.__rowId && editingCell.column === column;
           return (
             <td
               key={column}
-              className={format.className}
+              className={`${format.className} ${isSelected ? "selected-cell" : ""} ${isEditing ? "editing-cell" : ""}`}
               style={format.style}
               title={text(row[column])}
+              tabIndex={isSelected ? 0 : -1}
+              data-cell={`${row.__rowId}:${visibleColumns.indexOf(column)}`}
+              aria-selected={isSelected}
+              onClick={event => {
+                setSelectedCell({ rowId: row.__rowId, column });
+                event.currentTarget.focus();
+              }}
+              onDoubleClick={() => beginCellEdit(row, column)}
+              onKeyDown={event => handleCellKeyDown(event, row, column)}
               onContextMenu={event => showContextMenu(event, "cell", column, row[column], row)}
             >
-              {text(row[column])
-                ? (highlightMatches
-                    ? highlightedValue(row[column], smartQuery.highlightTerms || [])
-                    : text(row[column]))
-                : <span className="blank">—</span>}
+              {isEditing ? <input
+                className="cell-editor"
+                value={cellDraft}
+                aria-label={`Edit ${displayColumn(column)}`}
+                autoFocus
+                onChange={event => setCellDraft(event.target.value)}
+                onClick={event => event.stopPropagation()}
+                onKeyDown={event => {
+                  event.stopPropagation();
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitCellEdit();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelCellEditRef.current = true;
+                    setEditingCell(null);
+                    focusCell(row.__rowId, column);
+                  }
+                }}
+                onBlur={() => {
+                  if (cancelCellEditRef.current) {
+                    cancelCellEditRef.current = false;
+                    return;
+                  }
+                  commitCellEdit();
+                }}
+              /> : text(row[column])
+                  ? (highlightMatches
+                      ? highlightedValue(row[column], smartQuery.highlightTerms || [])
+                      : text(row[column]))
+                  : <span className="blank">—</span>}
             </td>
           );
         })}
@@ -1608,6 +1726,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--cp-accent) 10%,var(--cp-sur
           {contextMenu.type === "cell" && <span title={text(contextMenu.value)}>{text(contextMenu.value) || "(Blank)"}</span>}
         </div>
         {contextMenu.type === "cell" ? <>
+          <button role="menuitem" onClick={() => beginCellEdit(contextMenu.row, contextMenu.column)}><Pencil size={15} /><span>Edit cell</span></button>
           <button role="menuitem" onClick={copyContextValue}><Copy size={15} /><span>Copy cell value</span></button>
           <button role="menuitem" onClick={copyContextRow}><Copy size={15} /><span>Copy row</span></button>
           <div className="context-divider" />

@@ -25,6 +25,7 @@ according to the sensitivity of their source data.
 - Advanced filters, grouping, sorting, and pagination
 - Column visibility, renaming, resizing, and fit-to-content
 - Manual row ordering
+- In-place cell editing with keyboard navigation
 - Cell and row clipboard actions from the right-click menu
 - Value colors, per-value palettes, and conditional formatting
 - Excel, CSV, and standalone HTML exports
