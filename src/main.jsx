@@ -228,6 +228,42 @@ function highlightedValue(value, terms) {
   );
 }
 
+function linkedValue(value, terms = []) {
+  const source = text(value);
+  const parts = source.split(/(https?:\/\/[^\s<>"']+)/gi);
+  return parts.map((part, index) => {
+    if (!/^https?:\/\//i.test(part)) {
+      return <React.Fragment key={index}>{terms.length ? highlightedValue(part, terms) : part}</React.Fragment>;
+    }
+    const match = part.match(/^(.*?)([.,;!?]*)$/);
+    const url = match[1];
+    const suffix = match[2];
+    return <React.Fragment key={index}>
+      <a
+        className="cell-link"
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`Open ${url}`}
+        onClick={event => event.stopPropagation()}
+        onDoubleClick={event => event.stopPropagation()}
+      >
+        {terms.length ? highlightedValue(url, terms) : url}
+      </a>
+      {suffix}
+    </React.Fragment>;
+  });
+}
+
+function linkedHtml(value) {
+  return text(value).split(/(https?:\/\/[^\s<>"']+)/gi).map(part => {
+    if (!/^https?:\/\//i.test(part)) return escapeHtml(part);
+    const match = part.match(/^(.*?)([.,;!?]*)$/);
+    const url = match[1];
+    return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>${escapeHtml(match[2])}`;
+  }).join("");
+}
+
 function dedupeHeaders(headers) {
   const counts = new Map();
   return headers.map((header, index) => {
@@ -1144,7 +1180,7 @@ function App() {
       const style = rule ? cellStyle : rowStyle.style
         ? ` style="${rowStyle.className === "conditional-cell" ? `--rule-color:${rowStyle.style["--rule-color"]}` : `--value-color:${rowStyle.style["--value-color"]}`}"`
         : cellStyle;
-      return `<td class="${className}"${style}>${isBlank(row[column]) ? '<span class="blank">—</span>' : escapeHtml(row[column])}</td>`;
+      return `<td class="${className}"${style}>${isBlank(row[column]) ? '<span class="blank">—</span>' : linkedHtml(row[column])}</td>`;
       }).join("")}</tr>`;
     }).join("");
     const html = `<!doctype html>
@@ -1167,6 +1203,7 @@ table{width:100%;border-collapse:separate;border-spacing:0;background:var(--cp-s
 th,td{height:38px;padding:7px 10px;border-right:1px solid var(--cp-border);border-bottom:1px solid var(--cp-border);text-align:left;white-space:nowrap}
 th{position:sticky;top:0;background:var(--cp-bg-elevated);font-size:11px}th:last-child,td:last-child{border-right:0}tr:last-child td{border-bottom:0}
 tbody tr:hover td{background:color-mix(in srgb,var(--cp-accent) 10%,var(--cp-surface))}.blank{color:var(--cp-text-soft)}
+a{color:var(--cp-accent);text-decoration:underline;text-underline-offset:2px}a:hover{color:#8bc2ff}
 .value-color-0{background:var(--cp-value-0)}.value-color-1{background:var(--cp-value-1)}.value-color-2{background:var(--cp-value-2)}.value-color-3{background:var(--cp-value-3)}.value-color-4{background:var(--cp-value-4)}.value-color-5{background:var(--cp-value-5)}.value-color-6{background:var(--cp-value-6)}.value-color-7{background:var(--cp-value-7)}
 .conditional-cell{background:color-mix(in srgb,var(--rule-color) 23%,var(--cp-surface));box-shadow:inset 4px 0 var(--rule-color)}
 .custom-value-cell{background:color-mix(in srgb,var(--value-color) 23%,var(--cp-surface));box-shadow:inset 4px 0 var(--value-color)}
@@ -1308,9 +1345,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--cp-accent) 10%,var(--cp-sur
                   commitCellEdit();
                 }}
               /> : text(row[column])
-                  ? (highlightMatches
-                      ? highlightedValue(row[column], smartQuery.highlightTerms || [])
-                      : text(row[column]))
+                  ? linkedValue(row[column], highlightMatches ? smartQuery.highlightTerms || [] : [])
                   : <span className="blank">—</span>}
             </td>
           );

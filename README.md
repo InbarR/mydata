@@ -26,6 +26,7 @@ according to the sensitivity of their source data.
 - Column visibility, renaming, resizing, and fit-to-content
 - Manual row ordering
 - In-place cell editing with keyboard navigation
+- Clickable web links in cells and HTML exports
 - Cell and row clipboard actions from the right-click menu
 - Value colors, per-value palettes, and conditional formatting
 - Excel, CSV, and standalone HTML exports
