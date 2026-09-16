@@ -1269,7 +1269,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--cp-accent) 10%,var(--cp-sur
               key={column}
               className={`${format.className} ${isSelected ? "selected-cell" : ""} ${isEditing ? "editing-cell" : ""}`}
               style={format.style}
-              title={text(row[column])}
+              title={isSelected ? undefined : text(row[column])}
               tabIndex={isSelected ? 0 : -1}
               data-cell={`${row.__rowId}:${visibleColumns.indexOf(column)}`}
               aria-selected={isSelected}
