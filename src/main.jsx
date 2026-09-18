@@ -297,6 +297,12 @@ function parseSheet(workbook, sheetName, workbookName) {
 
 async function parseFile(file) {
   const data = await file.arrayBuffer();
+  const signature = new Uint8Array(data.slice(0, 8));
+  const isCompoundFile = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]
+    .every((byte, index) => signature[index] === byte);
+  if (isCompoundFile && /\.(xlsx|xlsm)$/i.test(file.name)) {
+    throw new Error(`${file.name} is encrypted or sensitivity-protected. In Excel, remove the password or sensitivity protection, then save a new .xlsx copy.`);
+  }
   const prefix = new TextDecoder().decode(data.slice(0, 512)).trimStart().toLowerCase();
   const isWebPage =
     file.type.toLowerCase().includes("text/html") ||
